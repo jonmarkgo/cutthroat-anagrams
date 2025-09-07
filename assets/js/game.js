@@ -56,6 +56,7 @@ class CutthroatAnagramsGame {
     // Real-time word update as user types
     document.getElementById('word-input').oninput = (e) => {
       this.updateWordBeingConfirmed(e.target.value);
+      this.updateStealDetails(e.target.value);
     };
     
     // Name input validation
@@ -527,6 +528,79 @@ class CutthroatAnagramsGame {
     modal.dataset.timestamp = timestamp;
     modal.dataset.word = word;
     
+    // Check if this is a steal and show details
+    const stealDetails = document.getElementById('steal-details');
+    const canFormFromTiles = this.canFormWordFromTiles(word, this.gameState.flipped_tiles);
+    
+    if (!canFormFromTiles) {
+      // This is a steal - figure out what's being stolen
+      const stealingInfo = this.determineStealingStrategy(word);
+      
+      if (stealingInfo) {
+        stealDetails.classList.remove('hidden');
+        
+        // Show who we're stealing from
+        const stealFromInfo = document.getElementById('steal-from-info');
+        stealFromInfo.innerHTML = '';
+        
+        Object.entries(stealingInfo).forEach(([playerId, wordIndices]) => {
+          const player = this.gameState.players.find(p => p.id === playerId);
+          if (player) {
+            wordIndices.forEach(index => {
+              const stolenWord = player.words[index];
+              const wordEl = document.createElement('div');
+              wordEl.className = 'badge badge-warning gap-2 mr-2 mb-1';
+              wordEl.innerHTML = `<span class="font-bold">${stolenWord.word.toUpperCase()}</span> from ${player.name}`;
+              stealFromInfo.appendChild(wordEl);
+            });
+          }
+        });
+        
+        // Calculate and show new letters being added
+        const allStolenLetters = [];
+        Object.entries(stealingInfo).forEach(([playerId, wordIndices]) => {
+          const player = this.gameState.players.find(p => p.id === playerId);
+          if (player) {
+            wordIndices.forEach(index => {
+              const stolenWord = player.words[index];
+              allStolenLetters.push(...stolenWord.letters);
+            });
+          }
+        });
+        
+        const wordLetters = word.toUpperCase().split('');
+        const newLetters = [...wordLetters];
+        
+        // Remove stolen letters from new letters to find what's being added
+        allStolenLetters.forEach(letter => {
+          const index = newLetters.indexOf(letter);
+          if (index > -1) {
+            newLetters.splice(index, 1);
+          }
+        });
+        
+        // Display new letters
+        const newLettersEl = document.getElementById('steal-new-letters');
+        newLettersEl.innerHTML = '';
+        
+        if (newLetters.length > 0) {
+          newLetters.forEach(letter => {
+            const letterEl = document.createElement('div');
+            letterEl.className = 'badge badge-primary badge-lg';
+            letterEl.textContent = letter;
+            newLettersEl.appendChild(letterEl);
+          });
+        } else {
+          newLettersEl.innerHTML = '<span class="text-sm text-base-content/70">None (rearranging only)</span>';
+        }
+      } else {
+        stealDetails.classList.add('hidden');
+      }
+    } else {
+      // Regular claim from tiles
+      stealDetails.classList.add('hidden');
+    }
+    
     // Show pause notification to other players immediately when modal appears
     // Note: This shows the originally detected word, which might be edited before confirmation
     this.channel.push("word_being_confirmed", {
@@ -646,6 +720,83 @@ class CutthroatAnagramsGame {
         real_time: true // Flag to indicate this is a real-time update
       });
     }, 300); // 300ms delay to throttle typing
+  }
+
+  updateStealDetails(word) {
+    if (!word || word.length < 2) return;
+    
+    word = word.toLowerCase().trim();
+    const stealDetails = document.getElementById('steal-details');
+    const canFormFromTiles = this.canFormWordFromTiles(word, this.gameState.flipped_tiles);
+    
+    if (!canFormFromTiles) {
+      // This is a steal - figure out what's being stolen
+      const stealingInfo = this.determineStealingStrategy(word);
+      
+      if (stealingInfo) {
+        stealDetails.classList.remove('hidden');
+        
+        // Show who we're stealing from
+        const stealFromInfo = document.getElementById('steal-from-info');
+        stealFromInfo.innerHTML = '';
+        
+        Object.entries(stealingInfo).forEach(([playerId, wordIndices]) => {
+          const player = this.gameState.players.find(p => p.id === playerId);
+          if (player) {
+            wordIndices.forEach(index => {
+              const stolenWord = player.words[index];
+              const wordEl = document.createElement('div');
+              wordEl.className = 'badge badge-warning gap-2 mr-2 mb-1';
+              wordEl.innerHTML = `<span class="font-bold">${stolenWord.word.toUpperCase()}</span> from ${player.name}`;
+              stealFromInfo.appendChild(wordEl);
+            });
+          }
+        });
+        
+        // Calculate and show new letters being added
+        const allStolenLetters = [];
+        Object.entries(stealingInfo).forEach(([playerId, wordIndices]) => {
+          const player = this.gameState.players.find(p => p.id === playerId);
+          if (player) {
+            wordIndices.forEach(index => {
+              const stolenWord = player.words[index];
+              allStolenLetters.push(...stolenWord.letters);
+            });
+          }
+        });
+        
+        const wordLetters = word.toUpperCase().split('');
+        const newLetters = [...wordLetters];
+        
+        // Remove stolen letters from new letters to find what's being added
+        allStolenLetters.forEach(letter => {
+          const index = newLetters.indexOf(letter);
+          if (index > -1) {
+            newLetters.splice(index, 1);
+          }
+        });
+        
+        // Display new letters
+        const newLettersEl = document.getElementById('steal-new-letters');
+        newLettersEl.innerHTML = '';
+        
+        if (newLetters.length > 0) {
+          newLetters.forEach(letter => {
+            const letterEl = document.createElement('div');
+            letterEl.className = 'badge badge-primary badge-lg';
+            letterEl.textContent = letter;
+            newLettersEl.appendChild(letterEl);
+          });
+        } else {
+          newLettersEl.innerHTML = '<span class="text-sm text-base-content/70">None (rearranging only)</span>';
+        }
+      } else {
+        stealDetails.classList.add('hidden');
+      }
+    } else {
+      // Regular claim from tiles
+      stealDetails.classList.add('hidden');
+    }
   }
 
   manualClaimWord() {
