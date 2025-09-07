@@ -42,8 +42,11 @@ defmodule CutthroatAnagrams.GameServer do
   # Server Implementation
 
   @impl true
-  def init({game_id, _opts}) when is_binary(game_id) do
+  def init({game_id, opts}) when is_binary(game_id) do
     tiles = create_tile_bag()
+    
+    # Get min_word_length from opts, default to 4
+    min_word_length = Keyword.get(opts, :min_word_length, 4)
     
     state = %{
       game_id: game_id,
@@ -51,12 +54,12 @@ defmodule CutthroatAnagrams.GameServer do
       players: %{},
       tile_bag: tiles,
       flipped_tiles: [],
-      min_word_length: 4,
+      min_word_length: min_word_length,
       current_turn: nil,
       game_started_at: nil
     }
     
-    Logger.info("Game server started for game: #{game_id}")
+    Logger.info("Game server started for game: #{game_id} with min_word_length: #{min_word_length}")
     {:ok, state}
   end
 

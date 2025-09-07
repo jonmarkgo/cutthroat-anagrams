@@ -6,7 +6,7 @@ defmodule CutthroatAnagramsWeb.GameChannel do
   alias CutthroatAnagrams.GameServer
 
   @impl true
-  def join("game:" <> game_id, %{"player_name" => player_name}, socket) do
+  def join("game:" <> game_id, %{"player_name" => player_name} = params, socket) do
     Logger.info("Player #{player_name} attempting to join game: #{game_id}")
     
     case GameSupervisor.find_game(game_id) do
@@ -30,7 +30,12 @@ defmodule CutthroatAnagramsWeb.GameChannel do
         end
       
       {:error, :game_not_found} ->
-        case GameSupervisor.start_game(game_id) do
+        # Get game options from params (for new games)
+        game_options = %{
+          min_word_length: Map.get(params, "min_word_length", 4)
+        }
+        
+        case GameSupervisor.start_game(game_id, game_options) do
           {:ok, game_pid} ->
             player_id = generate_player_id()
             

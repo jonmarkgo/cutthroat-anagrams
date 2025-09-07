@@ -6,10 +6,12 @@ defmodule CutthroatAnagrams.GameSupervisor do
     DynamicSupervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
-  def start_game(game_id) do
+  def start_game(game_id, game_options \\ %{}) do
+    opts = [name: via_tuple(game_id)] ++ Map.to_list(game_options)
+    
     child_spec = %{
       id: CutthroatAnagrams.GameServer,
-      start: {CutthroatAnagrams.GameServer, :start_link, [game_id, [name: via_tuple(game_id)]]}
+      start: {CutthroatAnagrams.GameServer, :start_link, [game_id, opts]}
     }
     
     case DynamicSupervisor.start_child(__MODULE__, child_spec) do

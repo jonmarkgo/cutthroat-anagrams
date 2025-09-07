@@ -96,8 +96,12 @@ class CutthroatAnagramsGame {
       return;
     }
     
+    // Get minimum word length from UI
+    const minWordLength = parseInt(document.getElementById('min-word-length').value);
+    
     this.gameId = this.generateGameId();
     this.playerName = playerName;
+    this.minWordLength = minWordLength; // Store for use when connecting
     this.connectToGame();
   }
 
@@ -130,10 +134,18 @@ class CutthroatAnagramsGame {
     
     this.socket.connect();
     
-    // Join game channel
-    this.channel = this.socket.channel(`game:${this.gameId}`, {
+    // Prepare channel join parameters
+    const channelParams = {
       player_name: this.playerName
-    });
+    };
+    
+    // Add min_word_length if this is a new game (i.e., we have it stored)
+    if (this.minWordLength) {
+      channelParams.min_word_length = this.minWordLength;
+    }
+    
+    // Join game channel
+    this.channel = this.socket.channel(`game:${this.gameId}`, channelParams);
     
     this.setupChannelHandlers();
     
@@ -271,6 +283,11 @@ class CutthroatAnagramsGame {
     document.getElementById('game-screen').classList.remove('hidden');
     document.getElementById('player-name-display').textContent = this.playerName;
     document.getElementById('code-display').textContent = this.gameId;
+    
+    // Display minimum word length from game state
+    if (this.gameState && this.gameState.min_word_length) {
+      document.getElementById('min-length-display').textContent = this.gameState.min_word_length;
+    }
   }
 
   updateGameUI() {
