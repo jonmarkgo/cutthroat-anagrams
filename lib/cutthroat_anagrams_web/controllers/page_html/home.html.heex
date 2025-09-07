@@ -1,0 +1,207 @@
+<div id="app" class="min-h-screen bg-base-100">
+  <header class="navbar bg-base-200 shadow-sm">
+    <div class="navbar-start">
+      <h1 class="text-xl font-bold">🎲 Cutthroat Anagrams</h1>
+    </div>
+    <div class="navbar-center">
+      <div id="game-status" class="text-base-content/70">Waiting for players...</div>
+    </div>
+    <div class="navbar-end">
+      <Layouts.theme_toggle />
+    </div>
+  </header>
+
+  <main class="container mx-auto p-4">
+    <!-- Game Setup Screen -->
+    <div id="setup-screen" class="max-w-lg mx-auto space-y-6">
+      <!-- Player Name (Always Required) -->
+      <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">Player Name</h2>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Enter your name to play</span>
+            </label>
+            <input type="text" id="player-name" placeholder="Your name" class="input input-bordered" maxlength="20" required>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Options -->
+      <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">Game Setup</h2>
+          
+          <!-- Create New Game -->
+          <div class="space-y-4">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Minimum word length</span>
+              </label>
+              <select id="min-word-length" class="select select-bordered">
+                <option value="3">3 letters</option>
+                <option value="4" selected>4 letters</option>
+                <option value="5">5 letters</option>
+              </select>
+            </div>
+
+            <div class="card-actions justify-center">
+              <button id="create-game-btn" class="btn btn-primary">Create New Game</button>
+            </div>
+          </div>
+
+          <div class="divider">OR</div>
+
+          <!-- Join Existing Game -->
+          <div class="space-y-4">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Game code</span>
+              </label>
+              <input type="text" id="game-code" placeholder="Enter game code" class="input input-bordered">
+            </div>
+            <div class="card-actions justify-center">
+              <button id="join-game-btn" class="btn btn-secondary">Join Existing Game</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Game Controls -->
+        <div class="lg:col-span-3">
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body">
+              <div class="flex justify-between items-center">
+                <div>
+                  <span id="player-name-display" class="font-semibold"></span>
+                  <div class="text-sm text-base-content/70">
+                    <div class="flex items-center gap-2">
+                      Game Code: <span id="code-display" class="font-mono"></span>
+                      <button id="copy-code-btn" class="btn btn-xs btn-ghost" title="Copy game code">
+                        📋
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button id="mic-toggle" class="btn btn-circle btn-primary">
+                  🎤
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Communal Pool -->
+        <div class="lg:col-span-2">
+          <div class="card bg-base-300 shadow-sm">
+            <div class="card-body">
+              <h3 class="card-title">Communal Pool</h3>
+              <div id="flipped-letters" class="flex flex-wrap gap-2 min-h-[100px] border-2 border-dashed border-base-content/20 rounded-lg p-4">
+                <!-- Flipped tiles will appear here -->
+              </div>
+              <div class="flex justify-between items-center mt-4">
+                <div class="text-sm text-base-content/70">
+                  <span id="remaining-count">98</span> tiles remaining
+                </div>
+                <button id="flip-tile-btn" class="btn btn-primary">Flip Next Tile</button>
+              </div>
+              
+              <!-- Manual Word Input -->
+              <div class="mt-4 border-t border-base-300 pt-4">
+                <div class="text-sm font-semibold mb-2">💬 Quick Claim</div>
+                <div class="flex gap-2">
+                  <input 
+                    type="text" 
+                    id="manual-word-input" 
+                    placeholder="Type a word to claim..."
+                    class="input input-bordered input-sm flex-1"
+                    maxlength="20"
+                  >
+                  <button id="manual-claim-btn" class="btn btn-sm btn-secondary">Claim</button>
+                </div>
+                <div class="text-xs text-base-content/60 mt-1">Alternative to voice recognition</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Players Area -->
+        <div>
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body">
+              <h3 class="card-title">Players</h3>
+              <div id="players-container" class="space-y-2">
+                <!-- Player cards will appear here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    
+    <!-- Word Confirmation Modal -->
+    <div id="word-confirmation-modal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">Confirm Your Word</h3>
+        <div id="recognized-word" class="text-2xl text-center my-4 font-bold text-primary"></div>
+        <div class="text-center mb-4">
+          <div id="confirmation-timer" class="text-4xl font-bold countdown text-warning">5</div>
+          <div class="text-sm text-base-content/70">seconds to confirm</div>
+        </div>
+        <div class="form-control">
+          <input type="text" id="word-input" placeholder="Type your word" class="input input-bordered">
+        </div>
+        <div class="modal-action">
+          <button id="confirm-word-btn" class="btn btn-primary">Claim Word</button>
+          <button id="cancel-word-btn" class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Word Claimed Notice Modal -->
+    <div id="interrupt-modal" class="modal">
+      <div id="interrupt-modal-box" class="modal-box bg-info text-info-content">
+        <h3 class="font-bold text-lg">
+          <span id="claiming-player"></span> <span id="claim-action">is confirming:</span>
+        </h3>
+        <div id="claimed-word" class="text-3xl text-center my-4 font-bold"></div>
+        <div class="text-center">
+          <div id="pause-message" class="text-lg">Game paused for confirmation...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coin Flip Modal -->
+    <div id="coinflip-modal" class="modal">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">Tie Detected!</h3>
+        <div id="tie-players" class="my-4"></div>
+        <div id="coin-result" class="text-center text-2xl font-bold my-4"></div>
+        <div class="modal-action justify-center">
+          <button id="flip-coin-btn" class="btn btn-primary">Flip Coin</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- End Game Screen -->
+    <div id="end-screen" class="hidden">
+      <div class="card bg-base-200 shadow-xl max-w-2xl mx-auto">
+        <div class="card-body">
+          <h2 class="card-title justify-center text-2xl">🏆 Game Over!</h2>
+          <div id="final-scores" class="space-y-2">
+            <!-- Final scores will appear here -->
+          </div>
+          <div class="card-actions justify-center">
+            <button id="new-game-btn" class="btn btn-primary">New Game</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
