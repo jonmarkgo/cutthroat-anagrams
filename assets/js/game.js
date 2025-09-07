@@ -219,8 +219,28 @@ class CutthroatAnagramsGame {
     
     this.channel.on("claim_rejected", (payload) => {
       console.log("Claim rejected:", payload);
-      this.showNotification(`Word "${payload.word}" was rejected: ${payload.reason}`);
+      
+      // Show user-friendly error messages
+      let message;
+      switch(payload.reason) {
+        case 'not_in_dictionary':
+          message = `"${payload.word.toUpperCase()}" is not in the dictionary`;
+          break;
+        case 'invalid_tiles':
+          message = `"${payload.word.toUpperCase()}" cannot be formed from available tiles`;
+          break;
+        case 'word_too_short':
+          message = `"${payload.word.toUpperCase()}" is too short (minimum ${this.gameState.min_word_length} letters)`;
+          break;
+        default:
+          message = `Word "${payload.word.toUpperCase()}" was rejected: ${payload.reason}`;
+      }
+      
+      this.showNotification(message, 'error');
       this.pendingClaims.delete(payload.timestamp);
+      
+      // Close the pause modal for other players when claim is rejected
+      this.updateModalToClaimRejection(payload);
     });
     
     // Tie resolution
@@ -278,6 +298,8 @@ class CutthroatAnagramsGame {
     const container = document.getElementById('players-container');
     container.innerHTML = this.gameState.players.map(player => {
       const isCurrentPlayer = player.id === this.playerId;
+      
+      // Create words display with proper spacing
       const words = player.words.map((wordObj, index) => {
         // Color code by word length to show value
         const lengthClass = wordObj.letters.length >= 7 ? 'border-success' :
@@ -289,10 +311,10 @@ class CutthroatAnagramsGame {
         
         // Create individual letter tiles for each word
         const letterTiles = wordObj.letters.map(letter => 
-          `<div class="badge badge-lg badge-primary font-mono">${letter}</div>`
+          `<div class="badge badge-sm badge-primary font-mono text-xs">${letter}</div>`
         ).join('');
         
-        return `<div class="card bg-base-100 border-2 ${lengthClass} ${stealableHint} p-3 m-1 inline-block" 
+        return `<div class="card bg-base-100 border-2 ${lengthClass} ${stealableHint} p-2 inline-block min-w-fit" 
                      title="Word: ${wordObj.word.toUpperCase()} (${wordObj.letters.length} letters)${isCurrentPlayer ? '' : ' - Click to steal!'}"
                      data-word="${wordObj.word}" 
                      data-word-index="${index}"
@@ -306,17 +328,35 @@ class CutthroatAnagramsGame {
       
       return `
         <div class="card bg-base-100 shadow-sm ${isCurrentPlayer ? 'ring-2 ring-primary' : ''}">
-          <div class="card-body p-3">
-            <div class="flex justify-between items-start">
-              <div>
-                <h4 class="font-semibold ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</h4>
-                <div class="text-sm text-base-content/70">Score: ${player.score}</div>
+          <div class="card-body p-4">
+            <!-- Player Info Header -->
+            <div class="flex justify-between items-center mb-3">
+              <div class="flex items-center gap-3">
+                <div>
+                  <h4 class="font-bold text-lg ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</h4>
+                  <div class="text-sm text-base-content/70">
+                    <span class="font-semibold">${player.score}</span> points • 
+                    <span class="font-semibold">${player.words.length}</span> word${player.words.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                ${isCurrentPlayer ? '<div class="badge badge-primary">You</div>' : ''}
               </div>
-              ${this.gameState.current_turn === player.id ? '<div class="badge badge-primary badge-sm">Turn</div>' : ''}
+              ${this.gameState.current_turn === player.id ? '<div class="badge badge-secondary animate-pulse">Turn</div>' : ''}
             </div>
-            <div class="flex flex-wrap gap-2 mt-2 justify-start">
-              ${words}
-            </div>
+            
+            <!-- Words Display Area -->
+            ${player.words.length > 0 ? `
+              <div class="border-t border-base-300 pt-3">
+                <div class="text-xs font-semibold text-base-content/60 mb-2 uppercase tracking-wide">Claimed Words</div>
+                <div class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-3 bg-base-50 rounded-lg border border-base-200">
+                  ${words}
+                </div>
+              </div>
+            ` : `
+              <div class="border-t border-base-300 pt-3">
+                <div class="text-center text-base-content/50 italic py-2">No words claimed yet</div>
+              </div>
+            `}
           </div>
         </div>
       `;
@@ -775,6 +815,23 @@ class CutthroatAnagramsGame {
     }
   }
 
+  updateModalToClaimRejection(payload) {
+    const modal = document.getElementById('interrupt-modal');
+    const modalBox = document.getElementById('interrupt-modal-box');
+    
+    if (modal.classList.contains('modal-open')) {
+      // Update to "rejected" state
+      modalBox.className = 'modal-box bg-error text-error-content';
+      document.getElementById('claim-action').textContent = 'failed to claim:';
+      document.getElementById('pause-message').textContent = `Claim rejected: ${payload.reason || 'Invalid word'}`;
+      
+      // Auto-close after showing rejection
+      setTimeout(() => {
+        modal.classList.remove('modal-open');
+      }, 2000);
+    }
+  }
+
   showWordClaimModal(payload) {
     const modal = document.getElementById('interrupt-modal');
     const modalBox = document.getElementById('interrupt-modal-box');
@@ -1041,6 +1098,25 @@ class CutthroatAnagramsGame {
     
     generateCombos(0, []);
     return result;
+  }
+
+  // Check if a word is valid in dictionary (cached check)
+  async isDictionaryWord(word) {
+    // Simple client-side cache to avoid repeated server calls
+    if (!this.dictionaryCache) {
+      this.dictionaryCache = new Map();
+    }
+    
+    const normalizedWord = word.toLowerCase();
+    
+    if (this.dictionaryCache.has(normalizedWord)) {
+      return this.dictionaryCache.get(normalizedWord);
+    }
+    
+    // We'll let the server handle dictionary validation for now
+    // In a production app, you might load a subset of the dictionary client-side
+    // For now, we'll rely on server validation during the claim process
+    return true; // Optimistically assume valid, server will validate
   }
 
   // Helper function to check if a word can be formed from available tiles

@@ -70,9 +70,9 @@
 
     <!-- Game Screen -->
     <div id="game-screen" class="hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <!-- Game Controls -->
-        <div class="lg:col-span-3">
+        <div class="lg:col-span-5">
           <div class="card bg-base-200 shadow-sm">
             <div class="card-body">
               <div class="flex justify-between items-center">
@@ -129,12 +129,12 @@
           </div>
         </div>
 
-        <!-- Players Area -->
-        <div>
-          <div class="card bg-base-200 shadow-sm">
+        <!-- Players & Words Area - Much Bigger! -->
+        <div class="lg:col-span-3">
+          <div class="card bg-base-200 shadow-sm h-full">
             <div class="card-body">
-              <h3 class="card-title">Players</h3>
-              <div id="players-container" class="space-y-2">
+              <h3 class="card-title">Players & Claimed Words</h3>
+              <div id="players-container" class="space-y-4 flex-1 overflow-y-auto">
                 <!-- Player cards will appear here -->
               </div>
             </div>

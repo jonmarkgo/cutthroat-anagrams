@@ -13,6 +13,7 @@ defmodule CutthroatAnagrams.Application do
       {DNSCluster, query: Application.get_env(:cutthroat_anagrams, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CutthroatAnagrams.PubSub},
       {Registry, keys: :unique, name: CutthroatAnagrams.GameRegistry},
+      CutthroatAnagrams.Dictionary,
       CutthroatAnagrams.GameSupervisor,
       # Start to serve requests, typically the last entry
       CutthroatAnagramsWeb.Endpoint

@@ -128,8 +128,11 @@ defmodule CutthroatAnagrams.GameServer do
       String.length(word) < state.min_word_length ->
         {:reply, {:error, :word_too_short}, state}
       
+      not CutthroatAnagrams.Dictionary.valid_word?(word) ->
+        {:reply, {:error, :not_in_dictionary}, state}
+      
       not valid_word_from_tiles?(word, state.flipped_tiles) ->
-        {:reply, {:error, :invalid_word}, state}
+        {:reply, {:error, :invalid_tiles}, state}
       
       true ->
         # Remove used tiles from flipped tiles
@@ -157,6 +160,9 @@ defmodule CutthroatAnagrams.GameServer do
       
       String.length(word) < state.min_word_length ->
         {:reply, {:error, :word_too_short}, state}
+      
+      not CutthroatAnagrams.Dictionary.valid_word?(word) ->
+        {:reply, {:error, :not_in_dictionary}, state}
       
       true ->
         # Get all letters from stolen words plus flipped tiles
@@ -218,6 +224,7 @@ defmodule CutthroatAnagrams.GameServer do
   end
 
   defp valid_word_from_tiles?(word, tiles) do
+    # Check if word can be formed from available tiles (dictionary check is separate)
     word_letters = String.upcase(word) |> String.graphemes()
     available_counts = count_letters(tiles)
     needed_counts = count_letters(word_letters)
