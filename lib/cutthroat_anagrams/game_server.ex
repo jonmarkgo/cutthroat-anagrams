@@ -166,30 +166,42 @@ defmodule CutthroatAnagrams.GameServer do
       
       true ->
         # Get all letters from stolen words plus flipped tiles
+        stolen_words = get_stolen_words(state.players, from_players)
         stolen_letters = get_letters_from_stolen_words(state.players, from_players)
         available_letters = stolen_letters ++ state.flipped_tiles
         
-        if valid_word_from_tiles?(word, available_letters) do
-          # Remove words from victims
-          updated_players = remove_words_from_players(state.players, from_players)
+        # Calculate which flipped tiles would be used
+        word_letters = String.upcase(word) |> String.graphemes()
+        used_flipped_tiles = word_letters -- stolen_letters
+        
+        cond do
+          not valid_word_from_tiles?(word, available_letters) ->
+            {:reply, {:error, :invalid_steal}, state}
           
-          # Calculate which flipped tiles were used
-          word_letters = String.upcase(word) |> String.graphemes()
-          used_flipped_tiles = word_letters -- stolen_letters
-          remaining_flipped = remove_used_tiles(state.flipped_tiles, used_flipped_tiles)
+          # Must use at least one new tile from the pool when stealing
+          Enum.empty?(used_flipped_tiles) ->
+            {:reply, {:error, :must_add_letter}, state}
           
-          # Add word to stealing player
-          player = Map.get(updated_players, player_id)
-          updated_words = player.words ++ [%{word: word, claimed_at: timestamp, letters: word_letters, stolen_from: from_players}]
-          updated_player = %{player | words: updated_words, score: calculate_score(updated_words)}
-          final_players = Map.put(updated_players, player_id, updated_player)
+          not valid_steal_transformation?(word, stolen_words, used_flipped_tiles) ->
+            {:reply, {:error, :invalid_transformation}, state}
           
-          new_state = %{state | players: final_players, flipped_tiles: remaining_flipped}
-          
-          Logger.info("Player #{player.name} stole word: #{word} from #{inspect(from_players)}")
-          {:reply, {:ok, new_state}, new_state}
-        else
-          {:reply, {:error, :invalid_steal}, state}
+          true ->
+            # Remove words from victims
+            updated_players = remove_words_from_players(state.players, from_players)
+            
+            # Remove used tiles from flipped tiles
+            remaining_flipped = remove_used_tiles(state.flipped_tiles, used_flipped_tiles)
+            
+            # Add word to stealing player
+            player = Map.get(updated_players, player_id)
+            updated_words = player.words ++ [%{word: word, claimed_at: timestamp, letters: word_letters, stolen_from: from_players}]
+            updated_player = %{player | words: updated_words, score: calculate_score(updated_words)}
+            final_players = Map.put(updated_players, player_id, updated_player)
+            
+            new_state = %{state | players: final_players, flipped_tiles: remaining_flipped}
+            
+            Logger.info("Player #{player.name} stole word: #{word} from #{inspect(from_players)}")
+            {:reply, {:ok, new_state}, new_state}
         end
     end
   end
@@ -253,6 +265,48 @@ defmodule CutthroatAnagrams.GameServer do
       word_indices
       |> Enum.map(&Enum.at(player.words, &1))
       |> Enum.flat_map(& &1.letters)
+    end)
+  end
+
+  defp get_stolen_words(players, from_players) do
+    from_players
+    |> Enum.flat_map(fn {player_id, word_indices} ->
+      player = Map.get(players, player_id)
+      word_indices
+      |> Enum.map(&Enum.at(player.words, &1))
+      |> Enum.map(& &1.word)
+    end)
+  end
+
+  defp valid_steal_transformation?(new_word, stolen_words, used_flipped_tiles) do
+    # A steal must use at least one new tile and create meaningful transformation
+    # Not just adding a simple suffix
+    
+    invalid_suffixes = ["s", "es", "ed", "ing", "ly", "er", "est", "ness", "ment", "ful", "less", "able", "ible"]
+    
+    new_word_lower = String.downcase(new_word)
+    num_new_tiles = length(used_flipped_tiles)
+    
+    # Check if any stolen word is just the new word minus a common suffix
+    not Enum.any?(stolen_words, fn stolen_word ->
+      stolen_lower = String.downcase(stolen_word)
+      
+      # If only adding 1-2 letters, check if it's just a suffix
+      if num_new_tiles <= 2 do
+        # Check if new word is just the stolen word plus a suffix
+        Enum.any?(invalid_suffixes, fn suffix ->
+          new_word_lower == stolen_lower <> suffix
+        end) or
+        # Also check if the stolen word is contained in the new word as a prefix
+        (String.starts_with?(new_word_lower, stolen_lower) and 
+         String.length(new_word_lower) - String.length(stolen_lower) == num_new_tiles)
+      else
+        # With 3+ new letters, generally allow it unless it's an obvious suffix
+        Enum.any?(["ing", "ness", "ment", "tion", "ation"], fn suffix ->
+          String.ends_with?(new_word_lower, suffix) and
+          String.starts_with?(new_word_lower, stolen_lower)
+        end)
+      end
     end)
   end
 

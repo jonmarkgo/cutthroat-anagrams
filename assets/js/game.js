@@ -232,6 +232,15 @@ class CutthroatAnagramsGame {
         case 'word_too_short':
           message = `"${payload.word.toUpperCase()}" is too short (minimum ${this.gameState.min_word_length} letters)`;
           break;
+        case 'must_add_letter':
+          message = `You must add at least one letter from the tile pool to steal a word!`;
+          break;
+        case 'invalid_transformation':
+          message = `"${payload.word.toUpperCase()}" is just a simple variation (like adding a suffix). You must rearrange letters to steal!`;
+          break;
+        case 'invalid_steal':
+          message = `Cannot steal to form "${payload.word.toUpperCase()}" - check available letters`;
+          break;
         default:
           message = `Word "${payload.word.toUpperCase()}" was rejected: ${payload.reason}`;
       }
@@ -803,6 +812,7 @@ class CutthroatAnagramsGame {
       // Update to "claimed" state
       modalBox.className = 'modal-box bg-success text-success-content';
       document.getElementById('claim-action').textContent = 'claimed:';
+      document.getElementById('claimed-word').textContent = payload.word.toUpperCase();
       document.getElementById('pause-message').textContent = 'Word claimed successfully!';
       
       // Auto-close after showing success
