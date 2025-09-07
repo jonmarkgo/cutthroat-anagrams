@@ -219,12 +219,12 @@ defmodule CutthroatAnagrams.GameServer do
     final_scores = calculate_final_scores(state.players)
     winner = determine_winner(final_scores)
     
-    final_state = %{state | 
+    final_state = Map.merge(state, %{
       status: :finished,
       final_scores: final_scores,
       winner: winner,
       ended_at: System.system_time(:millisecond)
-    }
+    })
     
     Logger.info("Game #{state.game_id} ended. Winner: #{inspect(winner)}")
     {:reply, {:ok, final_state}, final_state}
