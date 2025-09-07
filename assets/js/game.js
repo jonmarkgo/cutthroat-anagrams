@@ -674,9 +674,36 @@ class CutthroatAnagramsGame {
     // Clear the input
     input.value = '';
     
-    // Trigger the same confirmation dialog as voice recognition
+    // Directly claim the word without showing confirmation dialog
     const timestamp = Date.now();
-    this.showWordConfirmationModal(word, timestamp);
+    
+    // Show pause notification to other players
+    this.channel.push("word_being_confirmed", {
+      word: word,
+      timestamp: timestamp,
+      player_name: this.playerName
+    });
+    
+    // Determine if this is a regular claim or a steal
+    if (this.canFormWordFromTiles(word, this.gameState.flipped_tiles)) {
+      // Regular claim from flipped tiles
+      this.channel.push("confirm_claim", {
+        word: word,
+        timestamp: timestamp
+      });
+    } else {
+      // Must be stealing - figure out what to steal
+      const stealingInfo = this.determineStealingStrategy(word);
+      if (stealingInfo) {
+        this.channel.push("steal_word", {
+          word: word,
+          from_players: stealingInfo,
+          timestamp: timestamp
+        });
+      } else {
+        this.showNotification('Unable to determine how to form this word', 'error');
+      }
+    }
   }
 
   handleVoiceClaim(payload) {
