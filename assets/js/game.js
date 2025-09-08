@@ -36,8 +36,8 @@ class CutthroatAnagramsGame {
     // Game screen handlers
     document.getElementById('flip-tile-btn').onclick = () => this.flipTile();
     document.getElementById('vote-end-btn').onclick = () => this.voteToEndGame();
-    document.getElementById('mic-toggle').onclick = () => this.toggleMicrophone();
-    document.getElementById('copy-code-btn').onclick = () => this.copyGameCode();
+    document.getElementById('header-mic-toggle').onclick = () => this.toggleMicrophone();
+    document.getElementById('header-copy-code-btn').onclick = () => this.copyGameCode();
     document.getElementById('manual-claim-btn').onclick = () => this.manualClaimWord();
     
     // Modal handlers
@@ -325,12 +325,15 @@ class CutthroatAnagramsGame {
   switchToGameScreen() {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
-    document.getElementById('player-name-display').textContent = this.playerName;
-    document.getElementById('code-display').textContent = this.gameId;
+    
+    // Show and populate header game info
+    document.getElementById('header-game-info').classList.remove('hidden');
+    document.getElementById('header-player-name').textContent = this.playerName;
+    document.getElementById('header-code-display').textContent = this.gameId;
     
     // Display minimum word length from game state
     if (this.gameState && this.gameState.min_word_length) {
-      document.getElementById('min-length-display').textContent = this.gameState.min_word_length;
+      document.getElementById('header-min-length-display').textContent = this.gameState.min_word_length;
     }
   }
 
@@ -340,7 +343,7 @@ class CutthroatAnagramsGame {
     // Update flipped tiles
     const flippedContainer = document.getElementById('flipped-letters');
     flippedContainer.innerHTML = this.gameState.flipped_tiles.map(tile => 
-      `<div class="badge badge-lg badge-primary font-mono">${tile}</div>`
+      `<div class="w-12 h-12 scrabble-tile flex items-center justify-center rounded text-lg">${tile}</div>`
     ).join('');
     
     // Update remaining count
@@ -426,7 +429,7 @@ class CutthroatAnagramsGame {
         
         // Create individual letter tiles for each word
         const letterTiles = wordObj.letters.map(letter => 
-          `<div class="badge badge-sm badge-primary font-mono text-xs">${letter}</div>`
+          `<div class="w-6 h-6 scrabble-tile flex items-center justify-center rounded text-sm">${letter}</div>`
         ).join('');
         
         return `<div class="card bg-base-100 border-2 ${lengthClass} ${stealableHint} p-2 inline-block min-w-fit" 
@@ -443,40 +446,31 @@ class CutthroatAnagramsGame {
       
       return `
         <div class="card bg-base-100 shadow-sm ${isCurrentPlayer ? 'ring-2 ring-primary' : ''}">
-          <div class="card-body p-4">
-            <!-- Player Info Header -->
-            <div class="flex justify-between items-center mb-3">
-              <div class="flex items-center gap-3">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h4 class="font-bold text-lg ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</h4>
-                    <div class="badge badge-xs ${player.connected ? 'badge-success' : 'badge-error'}" 
-                         title="${player.connected ? 'Connected' : 'Disconnected'}">
-                      ${player.connected ? '●' : '○'}
-                    </div>
-                  </div>
-                  <div class="text-sm text-base-content/70">
-                    <span class="font-semibold">${player.score}</span> points • 
-                    <span class="font-semibold">${player.words.length}</span> word${player.words.length !== 1 ? 's' : ''}
-                  </div>
+          <div class="card-body p-2">
+            <!-- Compact Player Info Header -->
+            <div class="flex justify-between items-center mb-2 px-2 py-1">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="font-bold ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</span>
+                <div class="badge badge-xs ${player.connected ? 'badge-success' : 'badge-error'}" 
+                     title="${player.connected ? 'Connected' : 'Disconnected'}">
+                  ${player.connected ? '●' : '○'}
                 </div>
-                ${isCurrentPlayer ? '<div class="badge badge-primary">You</div>' : ''}
+                <span class="text-xs text-base-content/70">
+                  <span class="font-semibold">${player.score}</span>pts • 
+                  <span class="font-semibold">${player.words.length}</span>w
+                </span>
+                ${isCurrentPlayer ? '<div class="badge badge-xs badge-primary">You</div>' : ''}
+                ${this.gameState.current_turn === player.id ? '<div class="badge badge-xs badge-secondary animate-pulse">Turn</div>' : ''}
               </div>
-              ${this.gameState.current_turn === player.id ? '<div class="badge badge-secondary animate-pulse">Turn</div>' : ''}
             </div>
             
             <!-- Words Display Area -->
             ${player.words.length > 0 ? `
-              <div class="border-t border-base-300 pt-3">
-                <div class="text-xs font-semibold text-base-content/60 mb-2 uppercase tracking-wide">Claimed Words</div>
-                <div class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-3 bg-base-50 rounded-lg border border-base-200">
-                  ${words}
-                </div>
+              <div class="flex flex-wrap gap-2 max-h-64 overflow-y-auto p-2 bg-base-50 rounded border border-base-200">
+                ${words}
               </div>
             ` : `
-              <div class="border-t border-base-300 pt-3">
-                <div class="text-center text-base-content/50 italic py-2">No words claimed yet</div>
-              </div>
+              <div class="text-center text-base-content/50 text-sm italic py-4">No words claimed yet</div>
             `}
           </div>
         </div>
@@ -564,7 +558,7 @@ class CutthroatAnagramsGame {
 
   // Speech Recognition Implementation
   async toggleMicrophone() {
-    const micBtn = document.getElementById('mic-toggle');
+    const micBtn = document.getElementById('header-mic-toggle');
     
     if (!this.isListening) {
       try {

@@ -3,18 +3,32 @@
     <div class="navbar-start">
       <h1 class="text-xl font-bold">🎲 Cutthroat Anagrams</h1>
     </div>
-    <div class="navbar-center">
+    <div class="navbar-center flex flex-col items-center">
       <div id="game-status" class="text-base-content/70">Waiting for players...</div>
       <div id="vote-status" class="text-sm text-warning hidden mt-1">Votes to end: <span id="vote-count">0</span>/<span id="vote-needed">0</span></div>
     </div>
-    <div class="navbar-end">
+    <div class="navbar-end flex items-center gap-3">
+      <!-- Game info when in game -->
+      <div id="header-game-info" class="hidden text-sm text-right">
+        <div class="flex items-center gap-2">
+          <span id="header-player-name" class="font-semibold"></span>
+          <button id="header-mic-toggle" class="btn btn-xs btn-circle btn-primary" title="Toggle microphone">
+            🎤
+          </button>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span>Code: <span id="header-code-display" class="font-mono"></span></span>
+          <button id="header-copy-code-btn" class="btn btn-xs btn-ghost" title="Copy game code">📋</button>
+          <span class="ml-2">Min: <span id="header-min-length-display" class="font-mono">4</span></span>
+        </div>
+      </div>
       <Layouts.theme_toggle />
     </div>
   </header>
 
-  <main class="container mx-auto p-4">
+  <main class="w-full">
     <!-- Game Setup Screen -->
-    <div id="setup-screen" class="max-w-lg mx-auto space-y-6">
+    <div id="setup-screen" class="max-w-lg mx-auto space-y-6 p-4">
       <!-- Player Name (Always Required) -->
       <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
@@ -71,48 +85,20 @@
 
     <!-- Game Screen -->
     <div id="game-screen" class="hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <!-- Game Controls -->
-        <div class="lg:col-span-5">
-          <div class="card bg-base-200 shadow-sm">
-            <div class="card-body">
-              <div class="flex justify-between items-center">
-                <div>
-                  <span id="player-name-display" class="font-semibold"></span>
-                  <div class="text-sm text-base-content/70">
-                    <div class="flex items-center gap-2">
-                      Game Code: <span id="code-display" class="font-mono"></span>
-                      <button id="copy-code-btn" class="btn btn-xs btn-ghost" title="Copy game code">
-                        📋
-                      </button>
-                    </div>
-                    <div class="flex items-center gap-2 mt-1">
-                      Min word length: <span id="min-length-display" class="font-mono">4</span> letters
-                    </div>
-                  </div>
-                </div>
-                <button id="mic-toggle" class="btn btn-circle btn-primary">
-                  🎤
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="flex flex-col gap-4 p-4" style="height: calc(100vh - 4rem)">
 
-        <!-- Communal Pool -->
-        <div class="lg:col-span-2">
+        <!-- Communal Pool - Full Width -->
+        <div class="w-full">
           <div class="card bg-base-300 shadow-sm">
             <div class="card-body">
-              <h3 class="card-title">Communal Pool</h3>
-              <div id="flipped-letters" class="flex flex-wrap gap-2 min-h-[100px] border-2 border-dashed border-base-content/20 rounded-lg p-4">
-                <!-- Flipped tiles will appear here -->
-              </div>
-              <div class="flex justify-between items-center mt-4">
-                <div class="text-sm text-base-content/70">
-                  <span id="remaining-count">98</span> tiles remaining
-                </div>
-                <div class="flex items-center gap-3">
-                  <div id="flip-countdown" class="hidden">
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                <!-- Left: Tile count and controls -->
+                <div class="flex flex-col justify-center">
+                  <div class="text-sm text-base-content/70 mb-2">
+                    <span id="remaining-count">98</span> tiles remaining
+                  </div>
+                  <div id="flip-countdown" class="hidden mb-2">
                     <div class="text-center">
                       <div class="countdown font-mono text-2xl">
                         <span id="countdown-timer" style="--value:10;"></span>
@@ -120,41 +106,52 @@
                       <div class="text-xs text-base-content/60">auto-flip</div>
                     </div>
                   </div>
-                  <button id="flip-tile-btn" class="btn btn-primary">Flip Next Tile</button>
-                  <button id="vote-end-btn" class="btn btn-warning hidden">Vote to End Game</button>
                 </div>
-              </div>
-              
-              <!-- Manual Word Input -->
-              <div class="mt-4 border-t border-base-300 pt-4">
-                <div class="text-sm font-semibold mb-2">💬 Quick Claim</div>
-                <div class="flex gap-2">
-                  <input 
-                    type="text" 
-                    id="manual-word-input" 
-                    placeholder="Type a word to claim..."
-                    class="input input-bordered input-sm flex-1"
-                    maxlength="20"
-                  >
-                  <button id="manual-claim-btn" class="btn btn-sm btn-secondary">Claim</button>
+
+                <!-- Center: Communal Pool Letters -->
+                <div class="text-center">
+                  <h3 class="card-title justify-center mb-4">Communal Pool</h3>
+                  <div id="flipped-letters" class="flex flex-wrap justify-center gap-3 min-h-[120px] border-2 border-dashed border-base-content/20 rounded-lg p-6">
+                    <!-- Flipped tiles will appear here -->
+                  </div>
                 </div>
-                <div class="text-xs text-base-content/60 mt-1">Alternative to voice recognition</div>
+
+                <!-- Right: Action buttons and manual input -->
+                <div class="flex flex-col justify-center">
+                  <div class="flex flex-col gap-2 mb-4">
+                    <button id="flip-tile-btn" class="btn btn-primary">Flip Next Tile</button>
+                    <button id="vote-end-btn" class="btn btn-warning hidden">Vote to End Game</button>
+                  </div>
+                  
+                  <!-- Manual Word Input -->
+                  <div class="border-t border-base-300 pt-4">
+                    <div class="text-sm font-semibold mb-2">💬 Quick Claim</div>
+                    <div class="flex flex-col gap-2">
+                      <input 
+                        type="text" 
+                        id="manual-word-input" 
+                        placeholder="Type a word..."
+                        class="input input-bordered input-sm"
+                        maxlength="20"
+                      >
+                      <button id="manual-claim-btn" class="btn btn-sm btn-secondary">Claim</button>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Players & Words Area - Much Bigger! -->
-        <div class="lg:col-span-3">
-          <div class="card bg-base-200 shadow-sm h-full">
-            <div class="card-body">
-              <h3 class="card-title">Players & Claimed Words</h3>
-              <div id="players-container" class="space-y-4 flex-1 overflow-y-auto">
-                <!-- Player cards will appear here -->
-              </div>
-            </div>
+        <!-- Players & Words Area - Two per row -->
+        <div class="flex-1 overflow-y-auto">
+          <h3 class="text-lg font-semibold mb-4 text-center">Players & Claimed Words</h3>
+          <div id="players-container" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Player cards will appear here -->
           </div>
         </div>
+
       </div>
     </div>
 

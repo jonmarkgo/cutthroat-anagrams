@@ -103,3 +103,16 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Import Gotham font */
+@import url('https://fonts.googleapis.com/css2?family=Gotham:wght@400;500;700&display=swap');
+
+/* Scrabble-style tile class */
+.scrabble-tile {
+  font-family: 'Gotham', Arial, sans-serif;
+  background-color: #F5DEB3; /* Tan color */
+  color: #2C2C2C; /* Dark charcoal/black */
+  font-weight: bold;
+  border: 2px solid #D2B48C;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
