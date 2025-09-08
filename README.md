@@ -5,7 +5,7 @@ A real-time multiplayer anagram game built with Phoenix LiveView and WebSockets.
 ## 🎯 Game Rules
 
 ### Overview
-Cutthroat Anagrams is a fast-paced word game where players compete to claim words from a shared pool of letters. The twist? You can steal other players' words by making them into longer words!
+Cutthroat Anagrams (aka Pirate Anagrams or Anagram Thief or just Anagrams) is a fast-paced word game where players compete to claim words from a shared pool of letters. The twist? You can steal other players' words by making them into longer words!
 
 ### How to Play
 
@@ -29,7 +29,8 @@ Cutthroat Anagrams is a fast-paced word game where players compete to claim word
 4. **Stealing Words**
    - Take another player's word and add letter(s) from the communal pool
    - The new word must be longer than the original
-   - Example: Steal "CAT" + "S" → "CATS" or "CAT" + "H" → "HATCH"
+   - The new word must change the root word
+   - Example: Steal "CAT" + "S" → "CAST" is valid but "CATS" is not
 
 5. **Scoring & Winning**
    - Words are color-coded by length:
@@ -37,14 +38,14 @@ Cutthroat Anagrams is a fast-paced word game where players compete to claim word
      - 🟡 **Yellow border**: 5-6 letters (medium points)  
      - 🟢 **Green border**: 7+ letters (high points)
    - Score is based on total letters in your claimed words
-   - Game ends when players vote to end or tiles run out
+   - Game ends when all tiles are flipped and players vote to end or all tiles are claimed
 
 ### Advanced Features
 
 - **Voice Recognition**: Enable your microphone for hands-free word claiming
 - **Tie Breaking**: Simultaneous claims are resolved by coin flip
 - **Reconnection**: Rejoin games if disconnected
-- **Auto-flip Timer**: New tiles appear automatically every 10 seconds (resets when words are claimed)
+- **Auto-flip Timer**: New tiles appear automatically every 10 seconds (resets when words are claimed) if someone does not flip manually first
 
 ## 🚀 Getting Started
 
@@ -245,4 +246,4 @@ Cutthroat Anagrams combines the strategic thinking of word games with the excite
 
 ---
 
-*Built with ❤️ using Elixir, Phoenix, and modern web technologies.*
+*Built with ❤️ using Elixir, Phoenix, and modern web technologies by JonMarkGo and Claude Code.*
