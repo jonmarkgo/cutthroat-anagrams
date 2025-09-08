@@ -8,6 +8,7 @@ defmodule CutthroatAnagramsWeb.GameChannel do
   @impl true
   def join("game:" <> game_id, %{"player_name" => player_name} = params, socket) do
     Logger.info("Player #{player_name} attempting to join game: #{game_id}")
+    Logger.debug("Join parameters: #{inspect(params)}")
     
     # Check if this is a reconnection attempt
     reconnect_token = Map.get(params, "reconnect_token")
@@ -17,6 +18,7 @@ defmodule CutthroatAnagramsWeb.GameChannel do
       {:ok, game_pid} ->
         # Try to reconnect if we have the required info
         if reconnect_token && existing_player_id do
+          Logger.info("Attempting reconnection for player #{existing_player_id} with token")
           # Attempt reconnection
           case GameServer.reconnect_player(game_pid, existing_player_id) do
             {:ok, game_state, stored_token} when stored_token == reconnect_token ->
@@ -227,6 +229,33 @@ defmodule CutthroatAnagramsWeb.GameChannel do
   end
 
   @impl true
+  def handle_in("vote_to_end", _payload, socket) do
+    game_pid = socket.assigns.game_pid
+    player_id = socket.assigns.player_id
+    
+    case GameServer.vote_to_end(game_pid, player_id) do
+      {:ok, game_state} ->
+        broadcast!(socket, "vote_cast", %{
+          player_id: player_id,
+          player_name: socket.assigns.player_name,
+          game_state: serialize_game_state(game_state)
+        })
+        {:noreply, socket}
+      
+      {:ok, final_state, :game_ended} ->
+        broadcast!(socket, "game_ended", %{
+          final_scores: final_state.final_scores,
+          winner: final_state.winner,
+          game_duration: final_state.ended_at - final_state.game_started_at
+        })
+        {:noreply, socket}
+      
+      {:error, reason} ->
+        {:reply, {:error, %{reason: reason}}, socket}
+    end
+  end
+
+  @impl true
   def handle_in("end_game", _payload, socket) do
     game_pid = socket.assigns.game_pid
     
@@ -312,7 +341,8 @@ defmodule CutthroatAnagramsWeb.GameChannel do
       flipped_tiles: game_state.flipped_tiles,
       tiles_remaining: length(game_state.tile_bag),
       current_turn: game_state.current_turn,
-      min_word_length: game_state.min_word_length
+      min_word_length: game_state.min_word_length,
+      end_votes: Map.get(game_state, :end_votes, [])
     }
   end
 

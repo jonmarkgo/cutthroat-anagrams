@@ -153,8 +153,11 @@ class CutthroatAnagramsGame {
 
     // Add reconnection data if available
     if (this.reconnectToken && this.playerId) {
+      console.log('Attempting reconnection with player ID:', this.playerId);
       channelParams.reconnect_token = this.reconnectToken;
       channelParams.existing_player_id = this.playerId;
+    } else {
+      console.log('No reconnection data available, joining as new player');
     }
     
     // Join game channel
@@ -538,6 +541,14 @@ class CutthroatAnagramsGame {
     countdownEl.classList.add('hidden');
   }
 
+  resetFlipCountdown() {
+    // Reset the countdown back to full time
+    if (this.flipCountdownTimer) {
+      this.flipCountdownSeconds = 10;
+      this.updateCountdownDisplay();
+    }
+  }
+
   updateCountdownDisplay() {
     const timerEl = document.getElementById('countdown-timer');
     timerEl.style.setProperty('--value', this.flipCountdownSeconds);
@@ -675,6 +686,9 @@ class CutthroatAnagramsGame {
   handleSpeechWord(word, confidence) {
     const timestamp = Date.now();
     
+    // Reset the flip countdown timer when voice recognition detects a potential word
+    this.resetFlipCountdown();
+    
     // Show confirmation modal with timer
     this.showWordConfirmationModal(word, timestamp);
   }
@@ -796,6 +810,9 @@ class CutthroatAnagramsGame {
     const modal = document.getElementById('word-confirmation-modal');
     const word = document.getElementById('word-input').value.trim().toLowerCase();
     const timestamp = parseInt(modal.dataset.timestamp);
+    
+    // Reset the flip countdown timer when confirming a word
+    this.resetFlipCountdown();
     
     // Clear countdown timer
     if (modal.dataset.countdownInterval) {
@@ -968,6 +985,9 @@ class CutthroatAnagramsGame {
       return;
     }
     
+    // Reset the flip countdown timer when attempting to claim a word
+    this.resetFlipCountdown();
+    
     if (word.length < this.gameState.min_word_length) {
       this.showNotification(`Word must be at least ${this.gameState.min_word_length} letters`, 'warning');
       return;
@@ -1011,6 +1031,9 @@ class CutthroatAnagramsGame {
   }
 
   handleVoiceClaim(payload) {
+    // Reset the flip countdown timer when any voice claim is detected
+    this.resetFlipCountdown();
+    
     // Don't show interrupt for our own claims
     if (payload.player_id === this.playerId) return;
     
@@ -1631,40 +1654,84 @@ class CutthroatAnagramsGame {
     const urlParams = new URLSearchParams(window.location.search);
     const gameCodeFromUrl = urlParams.get('game');
     
+    // First, check for URL parameter
     if (gameCodeFromUrl) {
-      // Check for existing session for this game
       const existingSession = localStorage.getItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
       
       if (existingSession) {
-        try {
-          const sessionData = JSON.parse(existingSession);
-          const sessionAge = Date.now() - sessionData.timestamp;
-          
-          // Only use session if it's less than 1 hour old
-          if (sessionAge < 3600000) {
-            this.gameId = sessionData.gameId;
-            this.playerId = sessionData.playerId;
-            this.playerName = sessionData.playerName;
-            this.reconnectToken = sessionData.reconnectToken;
-            
-            // Pre-populate the player name field
-            document.getElementById('player-name').value = this.playerName;
-            
-            // Show a reconnect option to the user
-            this.showReconnectOption();
-            return;
-          } else {
-            // Clean up old session
-            localStorage.removeItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
-          }
-        } catch (e) {
-          console.error('Error parsing session data:', e);
-          localStorage.removeItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
+        if (this.tryRestoreSession(existingSession, gameCodeFromUrl)) {
+          return; // Successfully restored
         }
       }
       
       // No valid session, but we have a game code - pre-populate it
       document.getElementById('game-code').value = gameCodeFromUrl;
+      return;
+    }
+    
+    // No URL param - check for most recent game session in localStorage
+    const allKeys = Object.keys(localStorage).filter(key => key.startsWith('cutthroat_anagrams_game_'));
+    let mostRecentSession = null;
+    let mostRecentTime = 0;
+    let mostRecentGameId = null;
+    
+    for (const key of allKeys) {
+      try {
+        const sessionData = JSON.parse(localStorage.getItem(key));
+        if (sessionData.timestamp > mostRecentTime) {
+          mostRecentTime = sessionData.timestamp;
+          mostRecentSession = sessionData;
+          mostRecentGameId = sessionData.gameId;
+        }
+      } catch (e) {
+        console.error('Error parsing session data:', e);
+        localStorage.removeItem(key);
+      }
+    }
+    
+    // If we found a recent session, try to restore it
+    if (mostRecentSession && mostRecentGameId) {
+      const sessionAge = Date.now() - mostRecentTime;
+      if (sessionAge < 3600000) { // Less than 1 hour old
+        if (this.tryRestoreSession(JSON.stringify(mostRecentSession), mostRecentGameId)) {
+          return; // Successfully restored
+        }
+      } else {
+        // Clean up old session
+        localStorage.removeItem(`cutthroat_anagrams_game_${mostRecentGameId}`);
+      }
+    }
+  }
+
+  tryRestoreSession(sessionDataString, gameId) {
+    try {
+      const sessionData = JSON.parse(sessionDataString);
+      const sessionAge = Date.now() - sessionData.timestamp;
+      
+      // Only use session if it's less than 1 hour old
+      if (sessionAge < 3600000) {
+        this.gameId = sessionData.gameId;
+        this.playerId = sessionData.playerId;
+        this.playerName = sessionData.playerName;
+        this.reconnectToken = sessionData.reconnectToken;
+        
+        // Pre-populate the player name field
+        document.getElementById('player-name').value = this.playerName;
+        
+        console.log('Found existing session for game:', gameId);
+        
+        // Show a reconnect option to the user
+        this.showReconnectOption();
+        return true;
+      } else {
+        // Clean up old session
+        localStorage.removeItem(`cutthroat_anagrams_game_${gameId}`);
+        return false;
+      }
+    } catch (e) {
+      console.error('Error parsing session data:', e);
+      localStorage.removeItem(`cutthroat_anagrams_game_${gameId}`);
+      return false;
     }
   }
 

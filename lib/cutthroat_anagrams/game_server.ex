@@ -12,7 +12,9 @@ defmodule CutthroatAnagrams.GameServer do
   # Client API
 
   def start_link(game_id, opts \\ []) do
-    GenServer.start_link(__MODULE__, {game_id, opts}, opts)
+    # Separate GenServer options from game options
+    {genserver_opts, game_opts} = Keyword.split(opts, [:name])
+    GenServer.start_link(__MODULE__, {game_id, game_opts}, genserver_opts)
   end
 
   def join_player(pid, player_id, player_name) do
@@ -43,6 +45,10 @@ defmodule CutthroatAnagrams.GameServer do
     GenServer.call(pid, :get_game_state)
   end
 
+  def vote_to_end(pid, player_id) do
+    GenServer.call(pid, {:vote_to_end, player_id})
+  end
+
   def end_game(pid) do
     GenServer.call(pid, :end_game)
   end
@@ -64,7 +70,8 @@ defmodule CutthroatAnagrams.GameServer do
       flipped_tiles: [],
       min_word_length: min_word_length,
       current_turn: nil,
-      game_started_at: nil
+      game_started_at: nil,
+      end_votes: []
     }
     
     Logger.info("Game server started for game: #{game_id} with min_word_length: #{min_word_length}")
@@ -137,7 +144,10 @@ defmodule CutthroatAnagrams.GameServer do
           state.current_turn
         end
         
-        new_state = %{state | players: new_players, current_turn: new_current_turn}
+        # Remove the player's vote when they disconnect
+        new_end_votes = Enum.filter(state.end_votes, fn vote -> vote != player_id end)
+        
+        new_state = %{state | players: new_players, current_turn: new_current_turn, end_votes: new_end_votes}
         
         Logger.info("Player #{player.name} (#{player_id}) disconnected from game #{state.game_id}")
         {:reply, {:ok, new_state}, new_state}
@@ -263,6 +273,47 @@ defmodule CutthroatAnagrams.GameServer do
   @impl true
   def handle_call(:get_game_state, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call({:vote_to_end, player_id}, _from, state) do
+    cond do
+      state.status != :playing ->
+        {:reply, {:error, :game_not_started}, state}
+      
+      not Map.has_key?(state.players, player_id) ->
+        {:reply, {:error, :player_not_found}, state}
+      
+      player_id in state.end_votes ->
+        {:reply, {:error, :already_voted}, state}
+      
+      true ->
+        new_votes = [player_id | state.end_votes]
+        new_state = %{state | end_votes: new_votes}
+        
+        # Check if we have enough votes to end the game
+        total_players = map_size(state.players)
+        votes_needed = :math.ceil(total_players / 2)
+        
+        if length(new_votes) >= votes_needed do
+          # End the game automatically
+          final_scores = calculate_final_scores(state.players)
+          winner = determine_winner(final_scores)
+          
+          final_state = Map.merge(new_state, %{
+            status: :finished,
+            final_scores: final_scores,
+            winner: winner,
+            ended_at: System.system_time(:millisecond)
+          })
+          
+          Logger.info("Game #{state.game_id} ended by vote. Winner: #{inspect(winner)}")
+          {:reply, {:ok, final_state, :game_ended}, final_state}
+        else
+          Logger.info("Player #{player_id} voted to end game #{state.game_id}. #{length(new_votes)}/#{votes_needed} votes")
+          {:reply, {:ok, new_state}, new_state}
+        end
+    end
   end
 
   @impl true
