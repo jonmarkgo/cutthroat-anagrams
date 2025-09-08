@@ -25,24 +25,26 @@ defmodule CutthroatAnagrams.GameServerTest do
     end
 
     test "allows players to join", %{game_pid: pid} do
-      {:ok, state} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, state, token} = GameServer.join_player(pid, "player1", "Alice")
       
       assert map_size(state.players) == 1
       assert state.players["player1"].name == "Alice"
       assert state.players["player1"].words == []
       assert state.players["player1"].score == 0
+      assert state.players["player1"].connected == true
+      assert is_binary(token)
     end
 
     test "prevents duplicate player IDs from joining", %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
       {:error, :already_joined} = GameServer.join_player(pid, "player1", "Bob")
     end
 
     test "auto-starts game when 2+ players join", %{game_pid: pid} do
-      {:ok, state1} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, state1, _} = GameServer.join_player(pid, "player1", "Alice")
       assert state1.status == :waiting
       
-      {:ok, state2} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, state2, _} = GameServer.join_player(pid, "player2", "Bob")
       assert state2.status == :playing
       # The current_turn is set to the second player who joined (the one that triggered game start)
       assert state2.current_turn == "player2"
@@ -51,8 +53,8 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "tile flipping and turn management" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       :ok
     end
 
@@ -79,8 +81,8 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "claiming words from communal pool" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       
       # Set up known flipped tiles: C, A, T
       :sys.replace_state(pid, fn state ->
@@ -135,8 +137,8 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "stealing words from other players" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       
       # Alice claims "cat" first
       :sys.replace_state(pid, fn state ->
@@ -145,7 +147,8 @@ defmodule CutthroatAnagrams.GameServerTest do
           name: "Alice", 
           words: [%{word: "cat", letters: ["C", "A", "T"], claimed_at: 123456}], 
           score: 3, 
-          joined_at: 123000
+          joined_at: 123000,
+          connected: true
         }
         players = Map.put(state.players, "player1", alice)
         %{state | players: players, flipped_tiles: ["R", "S"], tile_bag: ["B", "E", "D", "M"]}
@@ -219,9 +222,9 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "multiple player interactions" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
-      {:ok, _} = GameServer.join_player(pid, "player3", "Charlie")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player3", "Charlie")
       
       # Set up a scenario with multiple words
       :sys.replace_state(pid, fn state ->
@@ -230,21 +233,24 @@ defmodule CutthroatAnagrams.GameServerTest do
           name: "Alice", 
           words: [%{word: "cat", letters: ["C", "A", "T"], claimed_at: 123456}], 
           score: 3, 
-          joined_at: 123000
+          joined_at: 123000,
+          connected: true
         }
         bob = %{
           id: "player2", 
           name: "Bob", 
           words: [%{word: "bat", letters: ["B", "A", "T"], claimed_at: 123457}], 
           score: 3, 
-          joined_at: 123001
+          joined_at: 123001,
+          connected: true
         }
         charlie = %{
           id: "player3", 
           name: "Charlie", 
           words: [], 
           score: 0, 
-          joined_at: 123002
+          joined_at: 123002,
+          connected: true
         }
         
         players = %{
@@ -291,8 +297,8 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "root word validation" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       
       # Alice has "cat"
       :sys.replace_state(pid, fn state ->
@@ -301,7 +307,8 @@ defmodule CutthroatAnagrams.GameServerTest do
           name: "Alice", 
           words: [%{word: "cat", letters: ["C", "A", "T"], claimed_at: 123456}], 
           score: 3, 
-          joined_at: 123000
+          joined_at: 123000,
+          connected: true
         }
         players = Map.put(state.players, "player1", alice)
         %{state | players: players, flipped_tiles: ["S", "E", "D", "R", "I", "N", "G"]}
@@ -328,8 +335,8 @@ defmodule CutthroatAnagrams.GameServerTest do
 
   describe "game end conditions" do
     setup %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       
       # Set up final scores
       :sys.replace_state(pid, fn state ->
@@ -341,14 +348,16 @@ defmodule CutthroatAnagrams.GameServerTest do
             %{word: "rat", letters: ["R", "A", "T"], claimed_at: 123457}
           ], 
           score: 6, 
-          joined_at: 123000
+          joined_at: 123000,
+          connected: true
         }
         bob = %{
           id: "player2", 
           name: "Bob", 
           words: [%{word: "cart", letters: ["C", "A", "R", "T"], claimed_at: 123458}], 
           score: 4, 
-          joined_at: 123001
+          joined_at: 123001,
+          connected: true
         }
         
         players = %{
@@ -390,8 +399,8 @@ defmodule CutthroatAnagrams.GameServerTest do
     end
 
     test "handles concurrent word claims", %{game_pid: pid} do
-      {:ok, _} = GameServer.join_player(pid, "player1", "Alice")
-      {:ok, _} = GameServer.join_player(pid, "player2", "Bob")
+      {:ok, _, _} = GameServer.join_player(pid, "player1", "Alice")
+      {:ok, _, _} = GameServer.join_player(pid, "player2", "Bob")
       
       :sys.replace_state(pid, fn state ->
         %{state | flipped_tiles: ["C", "A", "T"]}

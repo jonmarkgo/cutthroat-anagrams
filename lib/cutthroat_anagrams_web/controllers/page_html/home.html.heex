@@ -5,6 +5,7 @@
     </div>
     <div class="navbar-center">
       <div id="game-status" class="text-base-content/70">Waiting for players...</div>
+      <div id="vote-status" class="text-sm text-warning hidden mt-1">Votes to end: <span id="vote-count">0</span>/<span id="vote-needed">0</span></div>
     </div>
     <div class="navbar-end">
       <Layouts.theme_toggle />
@@ -110,7 +111,18 @@
                 <div class="text-sm text-base-content/70">
                   <span id="remaining-count">98</span> tiles remaining
                 </div>
-                <button id="flip-tile-btn" class="btn btn-primary">Flip Next Tile</button>
+                <div class="flex items-center gap-3">
+                  <div id="flip-countdown" class="hidden">
+                    <div class="text-center">
+                      <div class="countdown font-mono text-2xl">
+                        <span id="countdown-timer" style="--value:10;"></span>
+                      </div>
+                      <div class="text-xs text-base-content/60">auto-flip</div>
+                    </div>
+                  </div>
+                  <button id="flip-tile-btn" class="btn btn-primary">Flip Next Tile</button>
+                  <button id="vote-end-btn" class="btn btn-warning hidden">Vote to End Game</button>
+                </div>
               </div>
               
               <!-- Manual Word Input -->

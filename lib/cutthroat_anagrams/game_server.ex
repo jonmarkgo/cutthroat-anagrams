@@ -19,6 +19,14 @@ defmodule CutthroatAnagrams.GameServer do
     GenServer.call(pid, {:join_player, player_id, player_name})
   end
 
+  def reconnect_player(pid, player_id) do
+    GenServer.call(pid, {:reconnect_player, player_id})
+  end
+
+  def disconnect_player(pid, player_id) do
+    GenServer.call(pid, {:disconnect_player, player_id})
+  end
+
   def flip_tile(pid, player_id) do
     GenServer.call(pid, {:flip_tile, player_id})
   end
@@ -68,12 +76,17 @@ defmodule CutthroatAnagrams.GameServer do
     if Map.has_key?(state.players, player_id) do
       {:reply, {:error, :already_joined}, state}
     else
+      # Generate a reconnection token for this player
+      reconnect_token = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+      
       player = %{
         id: player_id,
         name: player_name,
         words: [],
         score: 0,
-        joined_at: System.system_time(:millisecond)
+        joined_at: System.system_time(:millisecond),
+        connected: true,
+        reconnect_token: reconnect_token
       }
       
       new_players = Map.put(state.players, player_id, player)
@@ -87,7 +100,47 @@ defmodule CutthroatAnagrams.GameServer do
       end
       
       Logger.info("Player #{player_name} (#{player_id}) joined game #{state.game_id}")
-      {:reply, {:ok, new_state}, new_state}
+      {:reply, {:ok, new_state, reconnect_token}, new_state}
+    end
+  end
+
+  @impl true
+  def handle_call({:reconnect_player, player_id}, _from, state) do
+    case Map.get(state.players, player_id) do
+      nil ->
+        {:reply, {:error, :player_not_found}, state}
+      
+      player ->
+        updated_player = %{player | connected: true}
+        new_players = Map.put(state.players, player_id, updated_player)
+        new_state = %{state | players: new_players}
+        
+        Logger.info("Player #{player.name} (#{player_id}) reconnected to game #{state.game_id}")
+        {:reply, {:ok, new_state, player.reconnect_token}, new_state}
+    end
+  end
+
+  @impl true
+  def handle_call({:disconnect_player, player_id}, _from, state) do
+    case Map.get(state.players, player_id) do
+      nil ->
+        {:reply, {:error, :player_not_found}, state}
+      
+      player ->
+        updated_player = %{player | connected: false}
+        new_players = Map.put(state.players, player_id, updated_player)
+        
+        # Skip to next connected player if this was the current turn
+        new_current_turn = if state.current_turn == player_id do
+          get_next_connected_player(new_players, player_id)
+        else
+          state.current_turn
+        end
+        
+        new_state = %{state | players: new_players, current_turn: new_current_turn}
+        
+        Logger.info("Player #{player.name} (#{player_id}) disconnected from game #{state.game_id}")
+        {:reply, {:ok, new_state}, new_state}
     end
   end
 
@@ -107,10 +160,8 @@ defmodule CutthroatAnagrams.GameServer do
         {tile, remaining_tiles} = List.pop_at(state.tile_bag, 0)
         new_flipped = state.flipped_tiles ++ [tile]
         
-        # Rotate turn to next player
-        player_ids = Map.keys(state.players)
-        current_index = Enum.find_index(player_ids, &(&1 == player_id))
-        next_player = Enum.at(player_ids, rem(current_index + 1, length(player_ids)))
+        # Rotate turn to next connected player
+        next_player = get_next_connected_player(state.players, player_id)
         
         new_state = %{state | 
           tile_bag: remaining_tiles,
@@ -365,4 +416,27 @@ defmodule CutthroatAnagrams.GameServer do
   end
 
   defp determine_winner(_), do: nil
+
+  defp get_next_connected_player(players, current_player_id) do
+    player_ids = Map.keys(players)
+    connected_players = Enum.filter(player_ids, fn id ->
+      player = Map.get(players, id)
+      player.connected
+    end)
+    
+    if Enum.empty?(connected_players) do
+      # If no players are connected, return the first player ID as fallback
+      List.first(player_ids)
+    else
+      current_index = Enum.find_index(connected_players, &(&1 == current_player_id))
+      
+      if current_index do
+        # Current player is connected, get next connected player
+        Enum.at(connected_players, rem(current_index + 1, length(connected_players)))
+      else
+        # Current player is disconnected, get first connected player
+        List.first(connected_players)
+      end
+    end
+  end
 end

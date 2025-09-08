@@ -8,10 +8,15 @@ class CutthroatAnagramsGame {
     this.playerId = null;
     this.gameId = null;
     this.playerName = null;
+    this.reconnectToken = null;
     this.isListening = false;
     this.currentRecognition = null;
     this.gameState = null;
     this.pendingClaims = new Map(); // Track simultaneous claims
+    
+    // Countdown timer for auto-flip
+    this.flipCountdownTimer = null;
+    this.flipCountdownSeconds = 10;
     
     // Speech recognition setup
     this.recognition = null;
@@ -20,6 +25,7 @@ class CutthroatAnagramsGame {
     
     this.initializeEventHandlers();
     this.updateGameSetupState();
+    this.checkForExistingGame();
   }
 
   initializeEventHandlers() {
@@ -29,6 +35,7 @@ class CutthroatAnagramsGame {
     
     // Game screen handlers
     document.getElementById('flip-tile-btn').onclick = () => this.flipTile();
+    document.getElementById('vote-end-btn').onclick = () => this.voteToEndGame();
     document.getElementById('mic-toggle').onclick = () => this.toggleMicrophone();
     document.getElementById('copy-code-btn').onclick = () => this.copyGameCode();
     document.getElementById('manual-claim-btn').onclick = () => this.manualClaimWord();
@@ -143,6 +150,12 @@ class CutthroatAnagramsGame {
     if (this.minWordLength) {
       channelParams.min_word_length = this.minWordLength;
     }
+
+    // Add reconnection data if available
+    if (this.reconnectToken && this.playerId) {
+      channelParams.reconnect_token = this.reconnectToken;
+      channelParams.existing_player_id = this.playerId;
+    }
     
     // Join game channel
     this.channel = this.socket.channel(`game:${this.gameId}`, channelParams);
@@ -154,6 +167,17 @@ class CutthroatAnagramsGame {
         console.log("Joined game successfully", response);
         this.playerId = response.player_id;
         this.gameState = response.game_state;
+        
+        // Store reconnection token if provided
+        if (response.reconnect_token) {
+          this.reconnectToken = response.reconnect_token;
+          this.saveGameSession();
+        }
+        
+        if (response.reconnected) {
+          this.showNotification("Reconnected to game!", "success");
+        }
+        
         this.switchToGameScreen();
         this.updateGameUI();
       })
@@ -172,9 +196,18 @@ class CutthroatAnagramsGame {
       this.showNotification(`${payload.player_name} joined the game`);
     });
     
-    this.channel.on("player_left", (payload) => {
-      console.log("Player left:", payload);
-      this.showNotification(`${payload.player_name} left the game`);
+    this.channel.on("player_disconnected", (payload) => {
+      console.log("Player disconnected:", payload);
+      this.gameState = payload.game_state;
+      this.updateGameUI();
+      this.showNotification(`${payload.player_name} disconnected`, "warning");
+    });
+
+    this.channel.on("player_reconnected", (payload) => {
+      console.log("Player reconnected:", payload);
+      this.gameState = payload.game_state;
+      this.updateGameUI();
+      this.showNotification(`${payload.player_name} reconnected`, "success");
     });
     
     // Tile flipped
@@ -276,6 +309,14 @@ class CutthroatAnagramsGame {
       console.log("Game ended:", payload);
       this.showEndScreen(payload);
     });
+
+    // Vote to end events
+    this.channel.on("vote_cast", (payload) => {
+      console.log("Vote cast:", payload);
+      this.gameState = payload.game_state;
+      this.updateGameUI();
+      this.showNotification(`${payload.player_name} voted to end the game`);
+    });
   }
 
   switchToGameScreen() {
@@ -305,19 +346,63 @@ class CutthroatAnagramsGame {
     // Update players
     this.updatePlayersDisplay();
     
-    // Update flip button state
+    // Update flip button state and vote button visibility
     const flipBtn = document.getElementById('flip-tile-btn');
+    const voteBtn = document.getElementById('vote-end-btn');
     const isMyTurn = this.gameState.current_turn === this.playerId;
-    flipBtn.disabled = !isMyTurn || this.gameState.status !== 'playing';
-    flipBtn.className = `btn ${isMyTurn ? 'btn-primary' : 'btn-disabled'}`;
+    const noTilesLeft = this.gameState.tiles_remaining === 0;
+    const noCommunalTiles = this.gameState.flipped_tiles.length === 0;
+    
+    if (this.gameState.status === 'playing' && noTilesLeft) {
+      // Show vote button instead of flip button when no tiles left
+      flipBtn.classList.add('hidden');
+      voteBtn.classList.remove('hidden');
+      
+      // Update vote button state based on whether player has voted
+      const hasVoted = this.gameState.end_votes && this.gameState.end_votes.includes(this.playerId);
+      voteBtn.disabled = hasVoted;
+      voteBtn.className = `btn ${hasVoted ? 'btn-disabled' : 'btn-warning'}`;
+      voteBtn.textContent = hasVoted ? 'Voted to End' : 'Vote to End Game';
+      
+      // Update vote status display
+      const voteStatus = document.getElementById('vote-status');
+      const voteCount = document.getElementById('vote-count');
+      const voteNeeded = document.getElementById('vote-needed');
+      
+      if (this.gameState.end_votes) {
+        voteStatus.classList.remove('hidden');
+        voteCount.textContent = this.gameState.end_votes.length;
+        voteNeeded.textContent = Math.ceil(this.gameState.players.length / 2);
+      }
+    } else {
+      // Show flip button normally
+      flipBtn.classList.remove('hidden');
+      voteBtn.classList.add('hidden');
+      flipBtn.disabled = !isMyTurn || this.gameState.status !== 'playing';
+      flipBtn.className = `btn ${isMyTurn ? 'btn-primary' : 'btn-disabled'}`;
+      
+      // Hide vote status
+      document.getElementById('vote-status').classList.add('hidden');
+    }
     
     // Update game status
     const statusEl = document.getElementById('game-status');
     if (this.gameState.status === 'waiting') {
       statusEl.textContent = `Waiting for players... (${this.gameState.players.length}/2)`;
     } else if (this.gameState.status === 'playing') {
-      const currentPlayer = this.gameState.players.find(p => p.id === this.gameState.current_turn);
-      statusEl.textContent = `${currentPlayer?.name || 'Unknown'}'s turn to flip`;
+      if (noTilesLeft) {
+        statusEl.textContent = noCommunalTiles ? 'No tiles left - vote to end game!' : 'All tiles flipped - claim remaining words!';
+      } else {
+        const currentPlayer = this.gameState.players.find(p => p.id === this.gameState.current_turn);
+        statusEl.textContent = `${currentPlayer?.name || 'Unknown'}'s turn to flip`;
+      }
+    }
+    
+    // Handle countdown timer
+    if (this.gameState.status === 'playing' && isMyTurn && this.gameState.tiles_remaining > 0) {
+      this.startFlipCountdown();
+    } else {
+      this.stopFlipCountdown();
     }
   }
 
@@ -360,7 +445,13 @@ class CutthroatAnagramsGame {
             <div class="flex justify-between items-center mb-3">
               <div class="flex items-center gap-3">
                 <div>
-                  <h4 class="font-bold text-lg ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</h4>
+                  <div class="flex items-center gap-2">
+                    <h4 class="font-bold text-lg ${isCurrentPlayer ? 'text-primary' : ''}">${player.name}</h4>
+                    <div class="badge badge-xs ${player.connected ? 'badge-success' : 'badge-error'}" 
+                         title="${player.connected ? 'Connected' : 'Disconnected'}">
+                      ${player.connected ? '●' : '○'}
+                    </div>
+                  </div>
                   <div class="text-sm text-base-content/70">
                     <span class="font-semibold">${player.score}</span> points • 
                     <span class="font-semibold">${player.words.length}</span> word${player.words.length !== 1 ? 's' : ''}
@@ -401,10 +492,62 @@ class CutthroatAnagramsGame {
   }
 
   flipTile() {
+    // Stop countdown when manually flipping
+    this.stopFlipCountdown();
+    
     this.channel.push("flip_tile", {})
       .receive("error", (resp) => {
         console.error("Flip tile error:", resp);
         alert(`Cannot flip tile: ${resp.reason}`);
+      });
+  }
+
+  // Countdown Timer Methods
+  startFlipCountdown() {
+    // Don't start if already running
+    if (this.flipCountdownTimer) return;
+    
+    this.flipCountdownSeconds = 10;
+    this.updateCountdownDisplay();
+    
+    // Show countdown display
+    const countdownEl = document.getElementById('flip-countdown');
+    countdownEl.classList.remove('hidden');
+    
+    this.flipCountdownTimer = setInterval(() => {
+      this.flipCountdownSeconds--;
+      this.updateCountdownDisplay();
+      
+      if (this.flipCountdownSeconds <= 0) {
+        this.stopFlipCountdown();
+        // Auto-flip the tile
+        console.log("Auto-flipping tile due to timeout");
+        this.flipTile();
+      }
+    }, 1000);
+  }
+
+  stopFlipCountdown() {
+    if (this.flipCountdownTimer) {
+      clearInterval(this.flipCountdownTimer);
+      this.flipCountdownTimer = null;
+    }
+    
+    // Hide countdown display
+    const countdownEl = document.getElementById('flip-countdown');
+    countdownEl.classList.add('hidden');
+  }
+
+  updateCountdownDisplay() {
+    const timerEl = document.getElementById('countdown-timer');
+    timerEl.style.setProperty('--value', this.flipCountdownSeconds);
+  }
+
+  voteToEndGame() {
+    this.channel.push("vote_to_end", {})
+      .receive("error", (resp) => {
+        console.error("Vote to end error:", resp);
+        alert(`Cannot vote to end: ${resp.reason}`);
       });
   }
 
@@ -842,15 +985,8 @@ class CutthroatAnagramsGame {
     // Clear the input
     input.value = '';
     
-    // Directly claim the word without showing confirmation dialog
+    // Directly claim the word without showing confirmation dialog or pause notification
     const timestamp = Date.now();
-    
-    // Show pause notification to other players
-    this.channel.push("word_being_confirmed", {
-      word: word,
-      timestamp: timestamp,
-      player_name: this.playerName
-    });
     
     // Determine if this is a regular claim or a steal
     if (this.canFormWordFromTiles(word, this.gameState.flipped_tiles)) {
@@ -1014,8 +1150,8 @@ class CutthroatAnagramsGame {
       setTimeout(() => {
         modal.classList.remove('modal-open');
       }, 1500);
-    } else if (payload.player_id !== this.playerId) {
-      // Show brief claim notification if modal wasn't already open
+    } else {
+      // Show brief claim notification for all players (including the claiming player)
       this.showWordClaimModal(payload);
     }
   }
@@ -1041,12 +1177,14 @@ class CutthroatAnagramsGame {
     const modal = document.getElementById('interrupt-modal');
     const modalBox = document.getElementById('interrupt-modal-box');
     
+    const isMyWord = payload.player_id === this.playerId;
+    
     // Set up "claimed" state for brief notification
-    modalBox.className = 'modal-box bg-info text-info-content';
-    document.getElementById('claiming-player').textContent = payload.player_name;
+    modalBox.className = `modal-box ${isMyWord ? 'bg-success text-success-content' : 'bg-info text-info-content'}`;
+    document.getElementById('claiming-player').textContent = isMyWord ? 'You' : payload.player_name;
     document.getElementById('claim-action').textContent = 'claimed:';
     document.getElementById('claimed-word').textContent = payload.word.toUpperCase();
-    document.getElementById('pause-message').textContent = 'Word claimed!';
+    document.getElementById('pause-message').textContent = isMyWord ? 'Great job! Word claimed successfully!' : 'Word claimed!';
     
     modal.classList.add('modal-open');
     
@@ -1092,6 +1230,7 @@ class CutthroatAnagramsGame {
     }
     
     this.stopListening();
+    this.stopFlipCountdown();
     
     // Reset state
     this.gameState = null;
@@ -1471,6 +1610,105 @@ class CutthroatAnagramsGame {
       word.length >= this.gameState.min_word_length &&
       this.canFormWordFromTiles(word, tiles)
     );
+  }
+
+  // Session Management Functions
+  saveGameSession() {
+    if (this.gameId && this.playerId && this.reconnectToken && this.playerName) {
+      const sessionData = {
+        gameId: this.gameId,
+        playerId: this.playerId,
+        playerName: this.playerName,
+        reconnectToken: this.reconnectToken,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`cutthroat_anagrams_game_${this.gameId}`, JSON.stringify(sessionData));
+    }
+  }
+
+  checkForExistingGame() {
+    // Check if we're already connected via URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameCodeFromUrl = urlParams.get('game');
+    
+    if (gameCodeFromUrl) {
+      // Check for existing session for this game
+      const existingSession = localStorage.getItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
+      
+      if (existingSession) {
+        try {
+          const sessionData = JSON.parse(existingSession);
+          const sessionAge = Date.now() - sessionData.timestamp;
+          
+          // Only use session if it's less than 1 hour old
+          if (sessionAge < 3600000) {
+            this.gameId = sessionData.gameId;
+            this.playerId = sessionData.playerId;
+            this.playerName = sessionData.playerName;
+            this.reconnectToken = sessionData.reconnectToken;
+            
+            // Pre-populate the player name field
+            document.getElementById('player-name').value = this.playerName;
+            
+            // Show a reconnect option to the user
+            this.showReconnectOption();
+            return;
+          } else {
+            // Clean up old session
+            localStorage.removeItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
+          }
+        } catch (e) {
+          console.error('Error parsing session data:', e);
+          localStorage.removeItem(`cutthroat_anagrams_game_${gameCodeFromUrl}`);
+        }
+      }
+      
+      // No valid session, but we have a game code - pre-populate it
+      document.getElementById('game-code').value = gameCodeFromUrl;
+    }
+  }
+
+  showReconnectOption() {
+    const setupScreen = document.getElementById('setup-screen');
+    
+    // Add reconnect notification
+    const reconnectDiv = document.createElement('div');
+    reconnectDiv.className = 'alert alert-info mb-4';
+    reconnectDiv.innerHTML = `
+      <div class="flex justify-between items-center">
+        <span>Found existing game session. Reconnect as ${this.playerName}?</span>
+        <div class="flex gap-2">
+          <button id="reconnect-btn" class="btn btn-sm btn-primary">Reconnect</button>
+          <button id="new-session-btn" class="btn btn-sm btn-ghost">Start New</button>
+        </div>
+      </div>
+    `;
+    
+    setupScreen.insertBefore(reconnectDiv, setupScreen.firstChild);
+    
+    // Add event handlers
+    document.getElementById('reconnect-btn').onclick = () => {
+      this.connectToGame();
+    };
+    
+    document.getElementById('new-session-btn').onclick = () => {
+      this.clearGameSession();
+      reconnectDiv.remove();
+      this.playerId = null;
+      this.reconnectToken = null;
+    };
+  }
+
+  clearGameSession() {
+    if (this.gameId) {
+      localStorage.removeItem(`cutthroat_anagrams_game_${this.gameId}`);
+    }
+  }
+
+  newGame() {
+    // Clear current session and reload page
+    this.clearGameSession();
+    window.location.href = '/';
   }
 }
 

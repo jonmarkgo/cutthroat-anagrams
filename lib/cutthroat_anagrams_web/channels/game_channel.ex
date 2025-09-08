@@ -9,24 +9,34 @@ defmodule CutthroatAnagramsWeb.GameChannel do
   def join("game:" <> game_id, %{"player_name" => player_name} = params, socket) do
     Logger.info("Player #{player_name} attempting to join game: #{game_id}")
     
+    # Check if this is a reconnection attempt
+    reconnect_token = Map.get(params, "reconnect_token")
+    existing_player_id = Map.get(params, "existing_player_id")
+    
     case GameSupervisor.find_game(game_id) do
       {:ok, game_pid} ->
-        player_id = generate_player_id()
-        
-        case GameServer.join_player(game_pid, player_id, player_name) do
-          {:ok, game_state} ->
-            socket = assign(socket, :game_id, game_id)
-                    |> assign(:player_id, player_id)
-                    |> assign(:player_name, player_name)
-                    |> assign(:game_pid, game_pid)
+        # Try to reconnect if we have the required info
+        if reconnect_token && existing_player_id do
+          # Attempt reconnection
+          case GameServer.reconnect_player(game_pid, existing_player_id) do
+            {:ok, game_state, stored_token} when stored_token == reconnect_token ->
+              socket = assign(socket, :game_id, game_id)
+                      |> assign(:player_id, existing_player_id)
+                      |> assign(:player_name, player_name)
+                      |> assign(:game_pid, game_pid)
+              
+              # Send reconnection broadcast
+              send(self(), {:after_reconnect, existing_player_id, player_name, game_state})
+              
+              {:ok, %{player_id: existing_player_id, game_state: serialize_game_state(game_state), reconnected: true}, socket}
             
-            # Send message to self to broadcast after joining
-            send(self(), {:after_join, player_id, player_name, game_state})
-            
-            {:ok, %{player_id: player_id, game_state: serialize_game_state(game_state)}, socket}
-          
-          {:error, reason} ->
-            {:error, %{reason: reason}}
+            _ ->
+              # Reconnection failed, try to join as new player
+              attempt_new_player_join(game_pid, player_name, socket, game_id)
+          end
+        else
+          # New player join
+          attempt_new_player_join(game_pid, player_name, socket, game_id)
         end
       
       {:error, :game_not_found} ->
@@ -37,23 +47,7 @@ defmodule CutthroatAnagramsWeb.GameChannel do
         
         case GameSupervisor.start_game(game_id, game_options) do
           {:ok, game_pid} ->
-            player_id = generate_player_id()
-            
-            case GameServer.join_player(game_pid, player_id, player_name) do
-              {:ok, game_state} ->
-                socket = assign(socket, :game_id, game_id)
-                        |> assign(:player_id, player_id)
-                        |> assign(:player_name, player_name)
-                        |> assign(:game_pid, game_pid)
-                
-                # Send message to self to broadcast after joining  
-                send(self(), {:after_join, player_id, player_name, game_state})
-                
-                {:ok, %{player_id: player_id, game_state: serialize_game_state(game_state)}, socket}
-              
-              {:error, reason} ->
-                {:error, %{reason: reason}}
-            end
+            attempt_new_player_join(game_pid, player_name, socket, game_id)
           
           {:error, reason} ->
             {:error, %{reason: "Failed to create game: #{inspect(reason)}"}}
@@ -274,12 +268,29 @@ defmodule CutthroatAnagramsWeb.GameChannel do
   end
 
   @impl true
+  def handle_info({:after_reconnect, player_id, player_name, game_state}, socket) do
+    # Broadcast player reconnected
+    broadcast_from!(socket, "player_reconnected", %{
+      player_id: player_id,
+      player_name: player_name,
+      game_state: serialize_game_state(game_state)
+    })
+    
+    {:noreply, socket}
+  end
+
+  @impl true
   def terminate(_reason, socket) do
     Logger.info("Player #{socket.assigns[:player_name]} left game #{socket.assigns[:game_id]}")
     
+    # Mark player as disconnected in game server
+    if socket.assigns[:game_pid] && socket.assigns[:player_id] do
+      GameServer.disconnect_player(socket.assigns[:game_pid], socket.assigns[:player_id])
+    end
+    
     # Only broadcast if socket successfully joined
     if socket.joined do
-      broadcast_from!(socket, "player_left", %{
+      broadcast_from!(socket, "player_disconnected", %{
         player_id: socket.assigns[:player_id],
         player_name: socket.assigns[:player_name]
       })
@@ -311,8 +322,33 @@ defmodule CutthroatAnagramsWeb.GameChannel do
         id: player.id,
         name: player.name,
         words: player.words,
-        score: player.score
+        score: player.score,
+        connected: player.connected
       }
     end)
+  end
+
+  defp attempt_new_player_join(game_pid, player_name, socket, game_id) do
+    player_id = generate_player_id()
+    
+    case GameServer.join_player(game_pid, player_id, player_name) do
+      {:ok, game_state, reconnect_token} ->
+        socket = assign(socket, :game_id, game_id)
+                |> assign(:player_id, player_id)
+                |> assign(:player_name, player_name)
+                |> assign(:game_pid, game_pid)
+        
+        # Send message to self to broadcast after joining
+        send(self(), {:after_join, player_id, player_name, game_state})
+        
+        {:ok, %{
+          player_id: player_id, 
+          game_state: serialize_game_state(game_state),
+          reconnect_token: reconnect_token
+        }, socket}
+      
+      {:error, reason} ->
+        {:error, %{reason: reason}}
+    end
   end
 end
