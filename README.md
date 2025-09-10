@@ -53,8 +53,9 @@ Cutthroat Anagrams (aka Pirate Anagrams or Anagram Thief or just Anagrams) is a 
 
 - **Elixir** 1.15+
 - **Erlang/OTP** 27+
-- **PostgreSQL** (for development)
 - **Node.js** (for asset compilation)
+
+**Note:** PostgreSQL is configured but not actually used - all game state is stored in memory via GenServers.
 
 ### Installation
 
@@ -84,8 +85,8 @@ Cutthroat Anagrams (aka Pirate Anagrams or Anagram Thief or just Anagrams) is a 
 
 ### Development Setup
 
-**Database Configuration:**
-The app uses PostgreSQL. Update `config/dev.exs` with your database credentials if needed.
+**Data Storage:**
+All game state is stored in memory using Elixir GenServers - no database required! Games are temporary and don't persist between server restarts.
 
 **Asset Compilation:**
 - CSS: Uses Tailwind CSS with DaisyUI components
@@ -129,17 +130,16 @@ This runs:
 
 ## 🛠 Development Commands
 
-### Database
+### Server Management
 
 ```bash
-# Reset database
-mix ecto.reset
+# Start the server
+mix phx.server
 
-# Run migrations
-mix ecto.migrate
+# Start in interactive mode
+iex -S mix phx.server
 
-# Rollback migrations
-mix ecto.rollback
+# Restart (games will be lost - stored in memory only)
 ```
 
 ### Assets
@@ -208,14 +208,13 @@ mix compile --warning-as-errors
 ### Environment Variables
 
 ```bash
-# Database
-DATABASE_URL=postgresql://user:pass@localhost/cutthroat_anagrams_dev
-
 # Phoenix
 SECRET_KEY_BASE=your-secret-key
 PHX_HOST=localhost
 PORT=4000
 ```
+
+**Note:** Database environment variables are not needed since the app doesn't use persistent storage.
 
 ### Game Settings
 
